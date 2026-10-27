@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#373d69">
+  <title>Notenfreund</title>
+  <style>
+    :root { color-scheme: light; --ink:#242838; --muted:#6b7080; --line:#e5e6ed; --brand:#373d69; --bg:#f7f7fa; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { width:min(850px,100%); margin:auto; padding:24px 16px 48px; }
+    .eyebrow { color:var(--muted); font-size:.75rem; font-weight:800; letter-spacing:.12em; }
+    h1 { margin:4px 0; font-size:2rem; }
+    .intro { color:var(--muted); margin:0 0 20px; }
+    .stats { display:flex; gap:10px; margin:16px 0; }
+    .stat,.panel,.piece { background:white; border:1px solid var(--line); border-radius:16px; }
+    .stat { flex:1; padding:12px; } .stat b { display:block; font-size:1.35rem; } .stat span { color:var(--muted); font-size:.82rem; }
+    .panel { padding:16px; margin:14px 0; }
+    form { margin:0; }
+    .upload { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+    input,select,button { font:inherit; }
+    input[type=file] { max-width:100%; }
+    input[type=text],select { min-width:0; width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; }
+    button,.button { display:inline-block; border:0; border-radius:10px; padding:10px 14px; background:var(--brand); color:#fff; font-weight:700; text-decoration:none; cursor:pointer; }
+    button.secondary,.button.secondary { background:#e9eaf5; color:#34395f; }
+    button.danger { background:#fff0f0; color:#9a3542; }
+    .toolbar { display:grid; grid-template-columns:1fr minmax(135px,190px) auto; gap:8px; }
+    .piece { padding:14px; margin:10px 0; }
+    .piece-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+    .piece h2 { font-size:1.05rem; margin:0; overflow-wrap:anywhere; }
+    .muted { color:var(--muted); font-size:.88rem; overflow-wrap:anywhere; }
+    .badge { padding:5px 9px; border-radius:99px; background:#e8eaf4; white-space:nowrap; font-size:.78rem; }
+    .edit { display:grid; grid-template-columns:1fr 1fr minmax(130px,.8fr) auto; gap:8px; margin-top:12px; }
+    .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    .flash { padding:11px 13px; border-radius:10px; margin:10px 0; background:#e4f4e8; }
+    .flash.error { background:#fff0f0; color:#8c2834; }
+    .empty { text-align:center; color:var(--muted); padding:25px 12px; }
+    @media(max-width:600px) { main{padding:18px 12px 40px}.toolbar{grid-template-columns:1fr 1fr}.toolbar input{grid-column:1/-1}.edit{grid-template-columns:1fr 1fr}.edit button{grid-column:1/-1}.stats{gap:6px}.stat{padding:10px 8px} }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">DEIN PERSÖNLICHER ÜBUNGSPLAN</div>
+  <h1>Notenfreund 🎼</h1>
+  <p class="intro">Deine Stücke. Dein Tempo. Dein nächster Song.</p>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}<div class="flash {{ 'error' if category == 'error' else '' }}">{{ message }}</div>{% endfor %}
+  {% endwith %}
+  <section class="stats">
+    <div class="stat"><b>{{ total }}</b><span>Stücke</span></div>
+    <div class="stat"><b>{{ counts.get('Neu', 0) }}</b><span>Neu</span></div>
+    <div class="stat"><b>{{ counts.get('Beherrscht', 0) }}</b><span>Beherrscht</span></div>
+  </section>
+  <section class="panel">
+    <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" class="upload">
+      <input type="file" name="score" accept=".pdf,.mscz,.mscx,.musicxml,.xml,.mxl,.mid,.midi" required>
+      <button type="submit">＋ Noten importieren</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Link zu einem Stück speichern</h2>
+    <p class="muted">Füge einen Link zu einer frei zugänglichen Notenseite ein. Der Link wird gespeichert und im Browser geöffnet; kostenpflichtige Inhalte bleiben kostenpflichtig.</p>
+    <form action="{{ url_for('add_link') }}" method="post" class="edit">
+      <input type="text" name="title" placeholder="Titel des Stücks" aria-label="Titel des Stücks" required>
+      <input type="url" name="source_url" placeholder="https://…" aria-label="Link zur Notenseite" required>
+      <button>Link speichern</button>
+    </form>
+  </section>
+  <div class="actions"><form action="{{ url_for('random_piece') }}" method="post"><button class="secondary">⤨ Zufälliges Übungsstück</button></form></div>
+  <h2>Meine Bibliothek</h2>
+  <form method="get" class="toolbar">
+    <input type="text" name="q" value="{{ query }}" placeholder="Titel, Komponist oder Dateiname suchen">
+    <select name="stage" aria-label="Status filtern">
+      <option value="Alle" {{ 'selected' if selected_stage == 'Alle' else '' }}>Alle Status</option>
+      {% for item in stages %}<option value="{{ item }}" {{ 'selected' if selected_stage == item else '' }}>{{ item }}</option>{% endfor %}
+    </select>
+    <button class="secondary">Filtern</button>
+  </form>
+  {% for piece in pieces %}
+    <article class="piece">
+      <div class="piece-head"><div><h2>{{ piece['title'] }}</h2><div class="muted">{{ piece['composer'] or 'Komponist nicht angegeben' }} · {{ piece['original_name'] }}</div></div><span class="badge">{{ piece['stage'] }}</span></div>
+      <form class="edit" action="{{ url_for('update_piece', piece_id=piece['id']) }}" method="post">
+        <input type="text" name="title" value="{{ piece['title'] }}" aria-label="Titel" required>
+        <input type="text" name="composer" value="{{ piece['composer'] }}" placeholder="Komponist (optional)" aria-label="Komponist">
+        <select name="stage" aria-label="Übungsstatus">{% for item in stages %}<option {{ 'selected' if item == piece['stage'] else '' }}>{{ item }}</option>{% endfor %}</select>
+        <button>Speichern</button>
+      </form>
+      <div class="actions">
+        {% if piece['source_url'] %}<a class="button secondary" href="{{ url_for('open_piece', piece_id=piece['id']) }}" target="_blank" rel="noopener">Link öffnen</a>{% elif piece['extension'] == 'pdf' %}<a class="button secondary" href="{{ url_for('open_piece', piece_id=piece['id']) }}" target="_blank">PDF öffnen</a>{% else %}<form action="{{ url_for('open_piece', piece_id=piece['id']) }}" method="get"><button class="secondary">Datei-Hinweis</button></form>{% endif %}
+        <form action="{{ url_for('practice', piece_id=piece['id']) }}" method="post"><button class="secondary">Heute geübt ✓</button></form>
+        <form action="{{ url_for('delete_piece', piece_id=piece['id']) }}" method="post" onsubmit="return confirm('Stück und Datei wirklich löschen?')"><button class="danger">Löschen</button></form>
+      </div>
+      {% if piece['practiced_on'] %}<div class="muted">Zuletzt geübt: {{ piece['practiced_on'] }}</div>{% endif %}
+    </article>
+  {% else %}
+    <div class="empty">Deine Notensammlung beginnt hier.<br>Importiere eine PDF- oder Notendatei.</div>
+  {% endfor %}
+</main>
+</body>
+</html>
